@@ -14,7 +14,7 @@ END_D = re.compile("\s*</text>\s*")
 STRIP = re.compile("['.,:;()+\s\"]+")
 DIGIT = re.compile("[,.\d+]")
 
-
+#TODO make into class
 def preprocess(path_to_corpus, relevance_treshold=None):
     """
     this function create new file to be the preprocessed corpus.
