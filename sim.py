@@ -167,13 +167,13 @@ def get_sim(word1, word2, PMatrix):
 # initialization
 index = 0
 col_words_index_map = {}
-for word in preprocess(r"C:\D\Documents\studies\cs\mean_comp\ex2\wacky_wiki_corpus_en1.words", relevance_treshold=20000):
+for word in preprocess(r".\toy_corpus", relevance_treshold=20000):
     col_words_index_map[word] = index
     index += 1
 
 col_index_word_map = {col_words_index_map[w] : w for w in col_words_index_map}
 
-row_words_index_map = get_simlex(r"C:\D\Documents\studies\cs\mean_comp\ex2\simlex_words")
+row_words_index_map = get_simlex(r".\simlex_words")
 row_index_word_map = {row_words_index_map[w] : w for w in row_words_index_map}
 
 count_matrix = create_freq_matrix(lambda x: x+1, row_words_index_map, col_words_index_map, 2)
