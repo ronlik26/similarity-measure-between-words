@@ -2,7 +2,7 @@ import sys, numpy, re, os
 from collections import Counter
 
 import math
-# import scipy.sparse as ss
+import scipy.sparse as ss
 from nltk.util import ngrams
 
 CLEAN_CORPUS = "clean_corpus"
@@ -43,6 +43,12 @@ def preprocess(path_to_corpus, relevance_treshold=None):
             while line != "":
                 line = raw_c.readline()
 
+                lineNum += 1
+                printLine += 1
+                if printLine == 1000000:
+                    print(lineNum)
+                    printLine = 0
+
                 if BEGIN_S.match(line):
                     sentence = ""
                 elif END_S.match(line):
@@ -55,7 +61,9 @@ def preprocess(path_to_corpus, relevance_treshold=None):
                     clean_word = STRIP.sub("", line).lower()
                     if DIGIT.match(clean_word):
                         clean_word = DIGIT_REPR
-                    sentence += clean_word
+
+                    add = " " if len(sentence) > 0 else ""
+                    sentence += add + clean_word
 
                     # add word to frequency count
                     words_count[clean_word] += 1
@@ -153,5 +161,37 @@ def add_to_ppmi_matrix(row_dic, cur_word, col_dic, M, N, Pmatrix):
             Pmatrix[coordinates] = ppmi
 
 
-col_words = preprocess(r"C:\D\Documents\studies\cs\mean_comp\ex2\wacky_wiki_corpus_en1.words")
-row_words = get_simlex(r"C:\D\Documents\studies\cs\mean_comp\ex2\simlex_words")
+def get_sim(word1, word2, PMatrix):
+    pass
+
+# initialization
+index = 0
+col_words_index_map = {}
+for word in preprocess(r"C:\D\Documents\studies\cs\mean_comp\ex2\wacky_wiki_corpus_en1.words", relevance_treshold=20000):
+    col_words_index_map[word] = index
+    index += 1
+
+col_index_word_map = {col_words_index_map[w] : w for w in col_words_index_map}
+
+row_words_index_map = get_simlex(r"C:\D\Documents\studies\cs\mean_comp\ex2\simlex_words")
+row_index_word_map = {row_words_index_map[w] : w for w in row_words_index_map}
+
+count_matrix = create_freq_matrix(lambda x: x+1, row_words_index_map, col_words_index_map, 2)
+ppmi_matrix = create_ppmi_matrix(row_words_index_map, col_words_index_map, count_matrix)
+
+# evaluation
+GOLD_STD_PAIR_PATT = re.compile("(?P<word1>\w+)\s+(?P<word2>\w+)\s+(?P<POS>[A-Z])\s+(?P<score>\d+\.\d+)\s*")
+def load_simlex_goldstandard(path):
+    test_simlex = {}
+    with open(path, 'r') as gold_std_f:
+        line = gold_std_f.readline()
+        while (line != ""):
+            line = gold_std_f.readline()
+            pair_match = GOLD_STD_PAIR_PATT.match(line)
+            word1 = pair_match.group("word1")
+            word2 = pair_match.group("word2")
+
+            # any pair of simlex words is mapped into triplet such as (POS, gold_standard score, our score)
+            test_simlex[(word1, word2)] = (pair_match.group("POS"), pair_match.group("score"), get_sim(word1, word2, ppmi_matrix))
+
+    return test_simlex
