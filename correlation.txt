@@ -1,0 +1,20 @@
+frequency 2 window
+Full correlation SpearmanrResult(correlation=-0.089532755189540153, pvalue=0.004646320915181263)
+A correlation SpearmanrResult(correlation=0.011447777491363666, pvalue=0.90507855513288415)
+N correlation SpearmanrResult(correlation=-0.052533738551167379, pvalue=0.17602225142968919)
+V correlation SpearmanrResult(correlation=-0.24687353220616987, pvalue=0.00020301284445894854)
+frequency 5 window
+Full correlation SpearmanrResult(correlation=-0.087821362671939143, pvalue=0.0054987293221587154)
+A correlation SpearmanrResult(correlation=0.012105947910568168, pvalue=0.89964890291464883)
+N correlation SpearmanrResult(correlation=-0.09479461965075571, pvalue=0.014467750541146008)
+V correlation SpearmanrResult(correlation=-0.17202970133182569, pvalue=0.010232036238578275)
+ppmi 2 window
+Full correlation SpearmanrResult(correlation=-0.19739995089472417, pvalue=3.1691793755163669e-10)
+A correlation SpearmanrResult(correlation=-0.15312115412653041, pvalue=0.10861570263495668)
+N correlation SpearmanrResult(correlation=-0.24562988310395872, pvalue=1.3546131031613603e-10)
+V correlation SpearmanrResult(correlation=-0.091175198771107621, pvalue=0.17585383101549418)
+ppmi 5 window
+Full correlation SpearmanrResult(correlation=-0.20521373600476642, pvalue=5.9660764612096443e-11)
+A correlation SpearmanrResult(correlation=-0.14459126549364004, pvalue=0.13000368812077984)
+N correlation SpearmanrResult(correlation=-0.25713099392545746, pvalue=1.6754769956115678e-11)
+V correlation SpearmanrResult(correlation=-0.10522788593275392, pvalue=0.11796968317284792)
