@@ -8,6 +8,22 @@ from scipy.spatial.distance import cosine
 from collections import Counter
 
 CLEAN_CORPUS = "clean_corpus"
+BIG_CORPUS_PATH = r".\wacky_wiki_corpus_en1.words"
+SIMLEX_FILE_PATH = r".\simlex_words"
+ROWS_INDICES_FILE = r".\rows_indices.json"
+COLS_INDICES_FILE = r".\cols_indices.json"
+FREQ_MATRIX_2 = r".\freq_matrix_2.mtx"
+FREQ_MATRIX_5 = r".\freq_matrix_5.mtx"
+PPMI_MATRIX_2 = r".\ppmi_matrix_2.mtx"
+PPMI_MATRIX_5 = r".\ppmi_matrix_5.mtx"
+GOLD_STANDARD_SIMLEX = r".\simlex_gold_standard.txt"
+COMP_FREQ_5 = "comp_freq_5.txt"
+COMP_FREQ_2 = "comp_freq_5.txt"
+COMP_PPMI_5 = "comp_freq_5.txt"
+COMP_PPMI_2 = "comp_freq_5.txt"
+
+USAGE_MESSAGE = "Usage:"
+
 DIGIT_REPR = "<!DIGIT!>"
 BEGIN_S = re.compile("\s*<s>\s*")
 END_S = re.compile("\s*</s>\s*")
@@ -15,19 +31,21 @@ START_D = re.compile("\s*<text id=\w+>\s*")
 END_D = re.compile("\s*</text>\s*")
 STRIP = re.compile("['.,:;()+\s\"]+")
 DIGIT = re.compile("[,.\d+]")
+GOLD_STD_PAIR_PATT = re.compile("(\w+)\s+(\w+)\s+([A-Z])\s+(\d+(?:\.\d+)?)\s*")
+
+SMOOTH_FACTOR = 2
 
 
 def init():
     index = 0
+    # the columns are the 20,000 most common words
     col_dic = {}
-    for word in preprocess(r".\wacky_wiki_corpus_en1.words", relevance_treshold=20000):
+    for word in preprocess(BIG_CORPUS_PATH, relevance_treshold=20000):
         col_dic[word] = index
         index += 1
 
-    # col_index_word_map = {col_words_index_map[w]: w for w in col_words_index_map}
-
-    row_dic = get_simlex(r".\simlex_words")
-    # row_index_word_map = {row_words_index_map[w]: w for w in row_words_index_map}
+    # the rows represents the words to measure the similarity between them.
+    row_dic = get_simlex(SIMLEX_FILE_PATH)
     return row_dic, col_dic
 
 
@@ -142,18 +160,30 @@ def add_to_matrix_gram(sent, row_dic, col_dic, M, k):
 
 
 def calculate_probabilies(row_dic, col_dic, M):
+    """
+    takes a matrix where each cell is a count,
+    and calculates the probability of each cell (co occurrence of words) to occurre
+    :param row_dic: map from words to indices for the words at the rows
+    :param col_dic: map from words to indices for the words at the columns
+    :param M: the matrix to calculate its probabilities
+    """
     N = M.sum()
-    result = ss.dok_matrix((len(row_dic), len(col_dic)))
     for sim_word in row_dic:
         for context_word in col_dic:
             w = row_dic[sim_word]
             c = col_dic[context_word]
-            result[(w, c)] = M[(w, c)] / N
-
-    return result
+            M[(w, c)] = M[(w, c)] / N
 
 
 def calculate_smoothed_probabilies(row_dic, col_dic, M, factor):
+    """
+    takes a matrix where each cell is a count,
+    and calculates the smoothed probability of each cell (co occurrence of words) to occurre,
+    means no zero probabilities are allowed!
+    :param row_dic: map from words to indices for the words at the rows
+    :param col_dic: map from words to indices for the words at the columns
+    :param M: the matrix to calculate its probabilities
+    """
     N = (factor * len(row_dic) * len(col_dic)) + M.sum()
     for sim_word in row_dic:
         for context_word in col_dic:
@@ -163,6 +193,13 @@ def calculate_smoothed_probabilies(row_dic, col_dic, M, factor):
 
 
 def calculate_ppmi(row_dic, col_dic, M):
+    """
+    takes a matrix with probabilities and calculates the PPMI of
+    each cell (simlex word with common word).
+    :param row_dic: map from words to indices for the words at the rows
+    :param col_dic: map from words to indices for the words at the columns
+    :param M: the matrix to calculate its PPMI values
+    """
     col_probs = [-1 for _ in range(len(col_dic))]
     for sim_word in row_dic:
         w = row_dic[sim_word]
@@ -177,95 +214,153 @@ def calculate_ppmi(row_dic, col_dic, M):
             prob_context_word = col_probs[c]
             M[(w, c)] = max(0, math.log2(M[(w, c)] / (prob_sim_word * prob_context_word)))
 
+
 def get_similarity(w1, w2, row_dic, M):
+    """
+    calculates the similarity between two words
+    according to the PPMI values in the given matrix.
+    :param row_dic: map of words to indices of the simlex words,
+    which represented as rows.
+    :param M: the matrix of PPMI values
+    :return:
+    """
     vec1 = M[row_dic[w1]]
     vec2 = M[row_dic[w2]]
 
     return cosine(vec1, vec2)
 
+
 # evaluation		 +
-GOLD_STD_PAIR_PATT = re.compile("(\w+)\s+(\w+)\s+([A-Z])\s+(\d+(?:\.\d+)?)\s*")
-def load_simlex_goldstandard(path, words_dic, M):
-    test_simlex = {}
-    with open(path, 'r') as gold_std_f:
-        line = gold_std_f.readline()
-        while (line != ""):
+def compare_simlex_words(sim_path, out_path, words_dic, M):
+    """
+    loading the relevant pairs from the gold standard file
+    and calculates our own similarity values according to the values
+    in the given matrix.
+    :param sim_path: path to the gold standard file.
+    :param out_path:patht o save our own file in the same format
+    :param words_dic: map form words to indices.
+    :param M: matrix with values to calculate similarity.
+    """
+    with open(sim_path, 'r') as gold_std_f:
+        with open(out_path, 'w+') as sim_comp:
             line = gold_std_f.readline()
-            pair_match = GOLD_STD_PAIR_PATT.match(line)
-            word1 = pair_match.group(1)
-            word2 = pair_match.group(2)
+            while (line != ""):
+                line = gold_std_f.readline()
+                pair_match = GOLD_STD_PAIR_PATT.match(line)
+                if pair_match == None:
+                    break
+                word1 = pair_match.group(1)
+                word2 = pair_match.group(2)
+                try:
+                    sim_val = get_similarity(word1, word2, words_dic, M)
+                except:
+                    continue
 
-            # any pair of simlex words is mapped into triplet such as (POS, gold_standard score, our score)
-            result = tuple([pair_match.group(3), pair_match.group(4), get_similarity(word1, word2, words_dic, M)])
-            test_simlex[(word1, word2)] = result
+                sim_comp.write("%s\t%s\t%s\t%s\n" % (word1, word2, pair_match.group(3), sim_val))
 
-    return test_simlex
 
 def main():
     # parse command line options
+    checkpoint = 0
+    if len(sys.argv) > 1:
+        try:
+            checkpoint = int(sys.argv[1])
+        except:
+            print(USAGE_MESSAGE)
 
-    # row_dic, col_dic = init()
+    if checkpoint != 0:
+        with open(ROWS_INDICES_FILE, 'r') as rows_file:
+            row_dic = json.load(rows_file)
+        with open(COLS_INDICES_FILE, 'r') as cols_file:
+            col_dic = json.load(cols_file)
 
-    # preprocess(r".\wacky_wiki_corpus_en1.words", relevance_treshold=20000)
-    with open(r".\rows_indices.json", 'r') as rows_file:
-        row_dic = json.load(rows_file)
-    with open(r".\cols_indices.json", 'r') as cols_file:
-        col_dic = json.load(cols_file)
+    else:
+        row_dic, col_dic = init()
+        with open(ROWS_INDICES_FILE, 'w+') as rows_file:
+            json.dump(row_dic, rows_file)
+        with open(COLS_INDICES_FILE, 'w+') as cols_file:
+            json.dump(col_dic, cols_file)
 
-    # M = create_freq_matrix(row_dic, col_dic, 2, r".\clean_corpus")
-    # mmwrite(r".\freq_matrix_2.mtx", M)
-    # with open(r".\rows_indices.json", 'w+') as rows_file:
-    #     json.dump(row_dic, rows_file)
-    # with open(r".\cols_indices.json", 'w+') as cols_file:
-    #     json.dump(col_dic, cols_file)
+    if checkpoint <= 1:
+        print("creating frequency matrix with context windows of 2")
+        M = create_freq_matrix(row_dic, col_dic, 2, CLEAN_CORPUS)
+        mmwrite(FREQ_MATRIX_2, M)
 
-    # loading the matrix
-    print("load matrix: context windows of length 5")
-    M = mmread(r".\results\freq_matrix_5.mtx").todense()
-    print("matrix loaded\n")
+        M.clear()
 
-    # print("calculating smoothed probabilities")
-    # calculate_smoothed_probabilies(row_dic, col_dic, M, 2)
-    # print("calculate PPMI")
-    # calculate_ppmi(row_dic, col_dic, M)
-    # print("recording...")
-    # mmwrite(r".\ppmi_smooth_5.mtx", M)
+        print("creating frequency matrix with context windows of 2")
+        M = create_freq_matrix(row_dic, col_dic, 5, CLEAN_CORPUS)
+        mmwrite(FREQ_MATRIX_2, M)
 
-    # print("\n====================================")
-    # print("loading matrix: context windows of length 2")
-    # M = mmread(r".\freq_matrix_2.mtx").todense()
-    # print("matrix loaded\n")
-    #
-    # print("calculating smoothed probabilities")
-    # calculate_smoothed_probabilies(row_dic, col_dic, M, 2)
-    # print("calculate PPMI")
-    # calculate_ppmi(row_dic, col_dic, M)
-    # print("recording...")
-    # mmwrite(r".\ppmi_smooth_2.mtx", M)
-    #
-    # print("finish")
+        M.clear()
 
-    print(load_simlex_goldstandard(r".\simlex_gold_standard.txt", row_dic, M))
+    if checkpoint <= 2:
+        print("load matrix: context windows of length 5")
+        M = mmread(FREQ_MATRIX_5).todense()
+        print("matrix loaded\n")
 
+        print("calculating smoothed probabilities")
+        calculate_smoothed_probabilies(row_dic, col_dic, M, SMOOTH_FACTOR)
+        print("calculate PPMI")
+        calculate_ppmi(row_dic, col_dic, M)
+        print("recording...")
+        mmwrite(PPMI_MATRIX_5, M)
 
-def convert_to_sparse(path_in, path_out):
-    with open(path_in, 'r') as inMatrix:
-        inMatrix.readline()
-        inMatrix.readline()
-        shape = tuple([int(num) for num in inMatrix.readline()[:-1].split(" ")])
-        with open(path_out, 'w+') as outMatrix:
-            outMatrix.write("%%MatrixMarket matrix coordinate integer general\n")
-            outMatrix.write("%\n")
-            for i in range(shape[0]):
-                print(i)
-                for j in range(shape[1]):
-                    val = inMatrix.readline()
-                    if eval(val) == 0:
-                        continue
+        M.clear()
 
-                    outMatrix.write("%d %d %s\n" % (i, j, val))
+        print("\nloading matrix: context windows of length 2")
+        M = mmread(FREQ_MATRIX_2).todense()
+        print("matrix loaded\n")
+
+        print("calculating smoothed probabilities")
+        calculate_smoothed_probabilies(row_dic, col_dic, M, SMOOTH_FACTOR)
+        print("calculate PPMI")
+        calculate_ppmi(row_dic, col_dic, M)
+        print("recording...")
+        mmwrite(PPMI_MATRIX_2, M)
+
+        M.clear()
+
+    if checkpoint <= 3:
+        print("Compare Stage\n")
+        print("load matrix: context windows of length 5")
+        M = mmread(FREQ_MATRIX_5).todense()
+        print("matrix loaded\n")
+        print("compare...")
+        compare_simlex_words(GOLD_STANDARD_SIMLEX, COMP_FREQ_5, row_dic, M)
+        print("finished")
+        M.clear()
+
+        print("load matrix: context windows of length 2")
+        M = mmread(FREQ_MATRIX_2).todense()
+        print("matrix loaded\n")
+        print("compare...")
+        compare_simlex_words(GOLD_STANDARD_SIMLEX, COMP_FREQ_2, row_dic, M)
+        print("finished")
+        M.clear()
+
+        print("load matrix: context windows of length 5")
+        M = mmread(PPMI_MATRIX_5).todense()
+        print("matrix loaded\n")
+        print("compare...")
+        compare_simlex_words(GOLD_STANDARD_SIMLEX, COMP_PPMI_5, row_dic, M)
+        print("finished")
+        M.clear()
+
+        print("load matrix: context windows of length 2")
+        M = mmread(PPMI_MATRIX_2).todense()
+        print("matrix loaded\n")
+        print("compare...")
+        compare_simlex_words(GOLD_STANDARD_SIMLEX, COMP_PPMI_2, row_dic, M)
+        print("finished")
+        M.clear()
+
 
 def test():
+    """
+    checking the claculation of the ppmi as
+    presented in class
+    """
     testM = ss.dok_matrix((4, 5))
     col_dic = {
         "computer": 0,
@@ -300,7 +395,6 @@ def test():
 
 
 # test()
-# convert_to_sparse(r".\ppmi_smooth_2.mtx", r".\ppmi_smooth_2_sparse.mtx")
 
 if __name__ == "__main__":
     main()
